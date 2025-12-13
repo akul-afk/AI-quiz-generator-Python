@@ -20,6 +20,10 @@ FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
+@app.get("/")
+async def serve_frontend():
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
 @app.get("/healthz")
 async def healthz():
     return {
@@ -27,9 +31,6 @@ async def healthz():
         "service": "ai-quiz-generator"
     }
 
-@app.get("/")
-async def serve_frontend():
-    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
 
 # ================= CORS =================
 app.add_middleware(
