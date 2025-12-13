@@ -151,19 +151,47 @@ def call_gemini(system_prompt, user_prompt):
 def generate_medium_mcqs(text, num_questions, level, is_from_topic=False):
 
     sys_prompt = (
-        "You are an expert quiz designer following Bloom's Taxonomy. "
-        f"Create exactly {num_questions} multiple-choice questions at the '{level}' level. "
-        "Return a pure JSON list only. "
-        "Each object requires: question_text, options (4), correct_answer, topic_tag."
-    )
+    "You are an expert quiz designer following Bloom's Taxonomy.\n\n"
+    f"Create exactly {num_questions} multiple-choice questions at the '{level}' level.\n\n"
+    "CRITICAL RULES:\n"
+    "- The user DOES NOT see the passage.\n"
+    "- Questions must be fully self-contained.\n"
+    "- DO NOT use phrases like:\n"
+    "  'according to the passage',\n"
+    "  'the passage states',\n"
+    "  'the text describes',\n"
+    "  'as mentioned above'.\n\n"
+    "Return ONLY a valid JSON array.\n"
+    "Each object must contain:\n"
+    "- question_text\n"
+    "- options (exactly 4)\n"
+    "- correct_answer\n"
+    "- topic_tag"
+)
 
-    user_prompt = f"PASSAGE:\n{text}\n\nGenerate the MCQs."
+    user_prompt = (
+    "Use the following content for INTERNAL REFERENCE ONLY.\n"
+    "Do NOT mention this content explicitly in the questions.\n\n"
+    f"{text}\n\n"
+    "Generate the MCQs now."
+)
 
     raw = call_gemini(sys_prompt, user_prompt)
     parsed = parse_ai_json(raw)
 
     if not parsed:
         return []
+    FORBIDDEN = [
+    "the passage",
+    "the text",
+    "according to",
+    "as mentioned above",
+    "this passage"
+    ]
+    parsed = [
+    q for q in parsed
+    if not any(p in q["question_text"].lower() for p in FORBIDDEN)
+]   
 
     # Add IDs
     for i, q in enumerate(parsed):
@@ -179,21 +207,45 @@ def generate_medium_mcqs(text, num_questions, level, is_from_topic=False):
 def generate_hard_mcqs_from_topic(topic, num_questions, level):
 
     sys_prompt = (
-        f"Create {num_questions} HARD-level MCQs about this topic: {topic}. "
-        f"Use Bloom's Taxonomy level: {level}. "
-        "Return ONLY a JSON array containing question_text, options, correct_answer, topic_tag."
-    )
+    "You are an expert quiz designer.\n\n"
+    f"Create exactly {num_questions} HARD multiple-choice questions about the topic:\n"
+    f"'{topic}'\n\n"
+    f"Use Bloom's Taxonomy level: {level}.\n\n"
+    "CRITICAL RULES:\n"
+    "- There is NO passage.\n"
+    "- The user only knows the topic.\n"
+    "- DO NOT reference any passage, text, article, or source.\n"
+    "- Questions must be completely self-contained.\n\n"
+    "Return ONLY a valid JSON array.\n"
+    "Each object must contain:\n"
+    "- question_text\n"
+    "- options (exactly 4)\n"
+    "- correct_answer\n"
+    "- topic_tag"
+)
+    raw = call_gemini(sys_prompt, "")
 
-    raw = call_gemini(sys_prompt, topic)
     parsed = parse_ai_json(raw)
 
     if not parsed:
         return []
+    FORBIDDEN = [
+    "the passage",
+    "the text",
+    "according to",
+    "as mentioned above",
+    "this passage"
+]
+    parsed = [
+    q for q in parsed
+    if not any(p in q["question_text"].lower() for p in FORBIDDEN)
+]
 
     for i, q in enumerate(parsed):
         q["id"] = i
 
     return parsed
+    
 
 
 # ============================================================
