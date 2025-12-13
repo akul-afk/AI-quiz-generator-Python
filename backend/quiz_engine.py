@@ -5,7 +5,6 @@ import random
 import requests
 import spacy
 from bs4 import BeautifulSoup
-import pdfplumber
 
 # ===============================g=
 # Load spaCy Model
@@ -90,18 +89,39 @@ def generate_mcqs(text, num_questions):
 # ============ GEMINI AI HELPERS =============================
 # ============================================================
 
-def parse_ai_json(text):
-    """Ensures Gemini AI JSON is cleaned and readable."""
+import json
+import re
+
+def parse_ai_json(text: str):
+    """
+    Robust JSON parser for LLM output.
+    Handles invalid escapes, markdown fences, and extra text.
+    Never raises — returns [] on failure.
+    """
+
+    if not text:
+        return []
+
+    # Remove markdown code fences
+    cleaned = re.sub(r"```(json)?", "", text, flags=re.IGNORECASE).strip()
+
+    # Extract first JSON array
+    start = cleaned.find("[")
+    end = cleaned.rfind("]")
+    if start == -1 or end == -1:
+        return []
+
+    cleaned = cleaned[start:end + 1]
+
+    # 🔥 FIX: Remove invalid backslash escapes
+    cleaned = re.sub(r"\\(?![\"\\/bfnrtu])", "", cleaned)
+
     try:
-        cleaned = text.replace("```json", "").replace("```", "").strip()
         return json.loads(cleaned)
-    except:
-        # Try extracting JSON block manually
-        start = text.find("[")
-        end = text.rfind("]")
-        if start != -1 and end != -1:
-            return json.loads(text[start:end+1])
-    return None
+    except json.JSONDecodeError as e:
+        print("JSON parse failed after cleanup:", e)
+        return []
+
 
 
 def call_gemini(system_prompt, user_prompt):
@@ -214,17 +234,6 @@ def get_webpage_text(url):
     except Exception as e:
         return None, str(e)
 
-def extract_text_from_pdf_bytes(raw_bytes):
-    try:
-        text = ""
-        with pdfplumber.open(bytes(raw_bytes)) as pdf:
-            for page in pdf.pages:
-                t = page.extract_text()
-                if t:
-                    text += t + "\n"
-        return text
-    except:
-        return ""
 
 
 # ============================================================

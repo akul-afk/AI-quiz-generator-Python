@@ -1,3 +1,294 @@
-.radio {
-    accent-color: #2563eb;
+/* ================= Theme ================= */
+:root {
+    --primary: #2563eb;
+    --primary-hover: #3b82f6;
+    --secondary: #374151;
+    --success: #22c55e;
+    --danger: #ef4444;
+    --bg-card: #1f2937;
+}
+
+/* ================= Inputs ================= */
+.input {
+    width: 100%;
+    padding: 0.6rem;
+    border-radius: 0.5rem;
+    background: #1f2937;
+    border: 1px solid #374151;
+    color: #e5e7eb;
+}
+
+/* ================= Buttons ================= */
+.btn {
+    padding: 0.6rem 1.2rem;
+    border-radius: 0.5rem;
+    font-weight: 600;
+    transition: all 0.25s ease;
+}
+
+.btn-primary {
+    background: var(--primary);
+}
+.btn-primary:hover {
+    background: var(--primary-hover);
+    box-shadow: 0 0 14px rgba(59,130,246,0.8);
+}
+
+.btn-secondary {
+    background: var(--secondary);
+}
+.btn-secondary:hover {
+    box-shadow: 0 0 12px rgba(148,163,184,0.6);
+}
+
+.btn-success {
+    background: var(--success);
+}
+.btn-success:hover {
+    box-shadow: 0 0 12px rgba(34,197,94,0.8);
+}
+
+.btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* ================= Tabs ================= */
+/* ================= Tabs ================= */
+.tab-btn {
+    padding: 0.45rem 1.1rem;
+    border-radius: 0.5rem;
+    background: #1f2937;
+    color: #e5e7eb;
+    font-weight: 600;
+    transition: all 0.25s ease;
+    border: 1px solid #374151;
+}
+
+/* Hover glow */
+.tab-btn:hover {
+    background: #273244;
+    box-shadow: 0 0 10px rgba(96, 165, 250, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Active tab */
+.active-tab {
+    background: var(--primary);
+    border-color: var(--primary);
+    box-shadow: 0 0 14px rgba(59,130,246,0.8);
+}
+
+
+/* ================= Quiz Cards ================= */
+.quiz-card {
+    background: var(--bg-card);
+    border: 1px solid #374151;
+    border-radius: 0.75rem;
+    padding: 1rem;
+}
+
+/* ================= Loading Overlay ================= */
+#loadingOverlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17,24,39,0.92);
+    display: none;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+}
+
+.spinner {
+    width: 64px;
+    height: 64px;
+    border: 6px solid #374151;
+    border-top: 6px solid var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.loading-text {
+    margin-top: 1rem;
+    font-size: 1.1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+/* ================= Modern Scrollbar ================= */
+
+/* Chrome, Edge, Safari */
+::-webkit-scrollbar {
+    width: 10px;
+}
+
+::-webkit-scrollbar-track {
+    background: #111827;
+}
+
+::-webkit-scrollbar-thumb {
+    background: linear-gradient(
+        180deg,
+        #2563eb,
+        #3b82f6
+    );
+    border-radius: 10px;
+    border: 2px solid #111827;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(
+        180deg,
+        #3b82f6,
+        #60a5fa
+    );
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #3b82f6 #111827;
+}
+.btn-primary:hover {
+    animation: glowPulse 1.2s infinite alternate;
+}
+
+@keyframes glowPulse {
+    from {
+        box-shadow: 0 0 10px rgba(59,130,246,0.6);
+    }
+    to {
+        box-shadow: 0 0 18px rgba(59,130,246,0.9);
+    }
+}
+/* ================= Skeleton Loader ================= */
+.skeleton {
+    background: linear-gradient(
+        90deg,
+        #1f2937 25%,
+        #374151 37%,
+        #1f2937 63%
+    );
+    background-size: 400% 100%;
+    animation: skeleton-loading 1.4s ease infinite;
+    border-radius: 0.6rem;
+}
+
+@keyframes skeleton-loading {
+    0% { background-position: 100% 50%; }
+    100% { background-position: 0 50%; }
+}
+
+.skeleton-question {
+    height: 22px;
+    margin-bottom: 12px;
+}
+
+.skeleton-option {
+    height: 16px;
+    width: 80%;
+    margin-bottom: 8px;
+}/* ================= Toast Notifications ================= */
+#toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    min-width: 260px;
+    max-width: 380px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-weight: 600;
+    color: white;
+
+    /* IMPORTANT */
+    display: none;
+    opacity: 1;
+
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    z-index: 20000;
+    pointer-events: none;
+}
+
+.toast-show {
+    display: block;
+    animation: toastIn 0.35s ease forwards;
+}
+
+@keyframes toastIn {
+    from {
+        transform: translateY(20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.toast-success {
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+}
+
+.toast-error {
+    background: linear-gradient(135deg, #ef4444, #b91c1c);
+}
+
+.toast-info {
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+}
+
+/* ================= Modal Dialog ================= */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(17, 24, 39, 0.75);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 30000;
+}
+
+.modal {
+    background: #1f2937;
+    border-radius: 14px;
+    padding: 20px;
+    width: 360px;
+    border: 1px solid #374151;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: modalIn 0.25s ease;
+}
+
+@keyframes modalIn {
+    from {
+        transform: scale(0.95);
+        opacity: 0;
+    }
+    to {
+        transform: scale(1);
+        opacity: 1;
+    }
+}
+
+.modal-title {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.modal-message {
+    color: #d1d5db;
+    margin-bottom: 1rem;
+}
+
+.modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.hidden {
+    display: none !important;
 }

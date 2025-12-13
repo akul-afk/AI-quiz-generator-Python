@@ -1,91 +1,159 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from models.schemas import *
+
 from quiz_engine import (
     generate_mcqs,
     generate_medium_mcqs,
     generate_hard_mcqs_from_topic,
     generate_passage_for_quiz,
-    get_ai_explanation
+    get_ai_explanation,
+    get_webpage_text
 )
-from utils.web_scraper import get_webpage_text
-from utils.pdf_reader import extract_text_from_pdf
 
-app = FastAPI(title="AI MCQ Generator Web API")
+app = FastAPI()
 
-# Allow frontend access (CORS)
+# ================= CORS =================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],   
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ======================================================
-# =============== QUIZ GENERATION ENDPOINTS ============
-# ======================================================
+# ================= Helpers =================
+def safe_response(title: str, questions):
+    """
+    Ensures frontend ALWAYS receives a valid response.
+    """
+    if not questions:
+        return {
+            "title": title,
+            "questions": [],
+            "error": "AI response could not be parsed. Please try again."
+        }
+    return {
+        "title": title,
+        "questions": questions
+    }
 
+# ================= Generate from Topic =================
 @app.post("/generate/topic")
-async def generate_from_topic(req: TopicRequest):
-    passage = generate_passage_for_quiz(req.topic, word_count=400)
+async def gen_topic(data: dict):
+    try:
+        topic = data.get("topic", "").strip()
+        mode = data.get("mode")
+        num = data.get("num_questions")
+        cognitive = data.get("cognitive_level")
 
-    if req.mode == "Easy":
-        quiz = generate_mcqs(passage, req.num_questions)
-    elif req.mode == "Medium":
-        quiz = generate_medium_mcqs(passage, req.num_questions, req.cognitive_level, True)
-    else:
-        quiz = generate_hard_mcqs_from_topic(req.topic, req.num_questions, req.cognitive_level)
+        if not topic:
+            return safe_response("Generated Topic Quiz", [])
 
-    return {"title": req.topic, "questions": quiz}
+        # Generate passage ONCE if needed
+        passage = None
+        if mode in ("Easy", "Medium"):
+            passage = generate_passage_for_quiz(topic)
+            if not passage:
+                return safe_response(topic, [])
 
+        if mode == "Easy":
+            questions = generate_mcqs(passage, num)
 
+        elif mode == "Medium":
+            questions = generate_medium_mcqs(
+                passage,
+                num,
+                cognitive,
+                is_from_topic=True
+            )
+
+        else:  # Hard
+            questions = generate_hard_mcqs_from_topic(
+                topic,
+                num,
+                cognitive
+            )
+
+        return safe_response(topic, questions)
+
+    except Exception as e:
+        print("Error in /generate/topic:", e)
+        return safe_response("Generated Topic Quiz", [])
+
+# ================= Generate from Passage =================
 @app.post("/generate/passage")
-async def generate_from_passage(req: PassageRequest):
-    text = req.passage
+async def gen_passage(data: dict):
+    try:
+        passage = data.get("passage", "").strip()
+        mode = data.get("mode")
+        num = data.get("num_questions")
+        cognitive = data.get("cognitive_level")
 
-    if req.mode == "Easy":
-        quiz = generate_mcqs(text, req.num_questions)
-    else:
-        quiz = generate_medium_mcqs(text, req.num_questions, req.cognitive_level, False)
+        if not passage:
+            return safe_response("Passage Quiz", [])
 
-    return {"title": "Passage Quiz", "questions": quiz}
+        if mode == "Easy":
+            questions = generate_mcqs(passage, num)
+        else:
+            questions = generate_medium_mcqs(
+                passage,
+                num,
+                cognitive,
+                is_from_topic=False
+            )
 
+        return safe_response("Passage Quiz", questions)
 
+    except Exception as e:
+        print("Error in /generate/passage:", e)
+        return safe_response("Passage Quiz", [])
+
+# ================= Generate from Webpage =================
 @app.post("/generate/webpage")
-async def generate_from_webpage(req: WebpageRequest):
-    passage, error = get_webpage_text(req.url)
-    if error:
-        return {"error": error}
+async def gen_webpage(data: dict):
+    try:
+        url = data.get("url", "").strip()
+        mode = data.get("mode")
+        num = data.get("num_questions")
+        cognitive = data.get("cognitive_level")
 
-    if req.mode == "Easy":
-        quiz = generate_mcqs(passage, req.num_questions)
-    else:
-        quiz = generate_medium_mcqs(passage, req.num_questions, req.cognitive_level, False)
+        if not url:
+            return safe_response("Webpage Quiz", [])
 
-    return {"title": "Webpage Quiz", "questions": quiz}
+        text, error = get_webpage_text(url)
+        if error or not text:
+            return {
+                "title": "Webpage Quiz",
+                "questions": [],
+                "error": error or "Failed to extract webpage text."
+            }
 
+        if mode == "Easy":
+            questions = generate_mcqs(text, num)
+        else:
+            questions = generate_medium_mcqs(
+                text,
+                num,
+                cognitive,
+                is_from_topic=False
+            )
 
-@app.post("/generate/pdf")
-async def generate_from_pdf(file: UploadFile = File(...), mode: str = "Medium", cognitive_level: str = "Comprehension", num_questions: int = 10):
-    text = extract_text_from_pdf(await file.read())
+        return safe_response("Webpage Quiz", questions)
 
-    if mode == "Easy":
-        quiz = generate_mcqs(text, num_questions)
-    else:
-        quiz = generate_medium_mcqs(text, num_questions, cognitive_level, False)
+    except Exception as e:
+        print("Error in /generate/webpage:", e)
+        return safe_response("Webpage Quiz", [])
 
-    return {"title": file.filename, "questions": quiz}
-
+# ================= Explanation =================
 @app.post("/explain")
-async def explain_wrong_answer(req: ExplainRequest):
-    explanation = get_ai_explanation(req.question, req.user_answer, req.correct_answer)
-    return {"explanation": explanation}
-
-
-# ======================================================
-# ================= HEALTH ENDPOINT ====================
-# ======================================================
-
-@app.get("/")
-def root():
-    return {"status": "AI MCQ Generator API Running"}
+async def explain(data: dict):
+    try:
+        explanation = get_ai_explanation(
+            data.get("question"),
+            data.get("user_answer"),
+            data.get("correct_answer")
+        )
+        return { "explanation": explanation }
+    except Exception as e:
+        print("Error in /explain:", e)
+        return { "explanation": "Sorry, explanation could not be generated." }

@@ -1,407 +1,534 @@
-// frontend/app.js
-// Full replacement. Handles PDF upload, save/load session, rename, delete.
+const API_BASE = "http://127.0.0.1:8000";
 
-const API_BASE = "http://127.0.0.1:8000"; // <-- set to your backend
 
 let openQuizzes = {};
 let weakSpots = [];
 let activeQuizId = null;
 
-// ---------- Helpers ----------
-function el(tag, cls = "") {
-    const d = document.createElement(tag);
-    if (cls) d.className = cls;
-    return d;
+function el(tag, className = "") {
+    const element = document.createElement(tag);
+    if (className) element.className = className;
+    return element;
 }
 
-function formatTitleForDisplay(title) {
-    if (!title) return "Untitled";
-    return title.length > 28 ? title.slice(0, 28) + "..." : title;
+/* ================= UI Helpers ================= */
+const overlay = document.getElementById("loadingOverlay");
+const generateBtn = document.getElementById("generateBtn");
+
+function showLoading(text = "Generating questions…") {
+    document.getElementById("quizControls").classList.add("hidden");
+    showSkeletonLoader();
+    overlay.style.display = "flex";
+    overlay.querySelector(".loading-text").textContent = text;
+    generateBtn.disabled = true;
 }
 
-// ---------- Tabs ----------
-document.querySelectorAll(".tab-btn").forEach(btn => {
-    btn.addEventListener("click", () => {
-        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active-tab"));
-        document.querySelectorAll(".tab-panel").forEach(panel => panel.classList.add("hidden"));
-
-        btn.classList.add("active-tab");
-        document.getElementById(btn.dataset.tab).classList.remove("hidden");
-    });
-});
-
-// ---------- Generate Quiz ----------
-document.getElementById("generateBtn").addEventListener("click", async () => {
-    const mode = document.getElementById("modeSelect").value;
-    const cognitive = document.getElementById("cognitiveSelect").value;
-    const num = parseInt(document.getElementById("numSelect").value);
-
-    // Detect active tab
-    if (!document.getElementById("topicTab").classList.contains("hidden")) {
-        const topic = document.getElementById("topicInput").value.trim();
-        if (!topic) { alert("Enter a topic"); return; }
-        await callGenerateJSON("/generate/topic", { topic, mode, cognitive_level: cognitive, num_questions: num });
-    }
-    else if (!document.getElementById("passageTab").classList.contains("hidden")) {
-        const passage = document.getElementById("passageInput").value.trim();
-        if (!passage) { alert("Paste a passage"); return; }
-        await callGenerateJSON("/generate/passage", { passage, mode, cognitive_level: cognitive, num_questions: num });
-    }
-    else if (!document.getElementById("webTab").classList.contains("hidden")) {
-        const url = document.getElementById("webInput").value.trim();
-        if (!url) { alert("Paste a URL"); return; }
-        await callGenerateJSON("/generate/webpage", { url, mode, cognitive_level: cognitive, num_questions: num });
-    }
-    else if (!document.getElementById("pdfTab").classList.contains("hidden")) {
-        // PDF: use FormData to upload the file
-        const fileInput = document.getElementById("pdfInput");
-        if (!fileInput.files || fileInput.files.length === 0) { alert("Select a PDF file first."); return; }
-        const file = fileInput.files[0];
-
-        const form = new FormData();
-        form.append("file", file);                // Upload file
-        form.append("mode", mode);                // mode field
-        form.append("cognitive_level", cognitive);
-        form.append("num_questions", num);
-
-        // Show simple loading UI
-        const genBtn = document.getElementById("generateBtn");
-        genBtn.disabled = true;
-        genBtn.textContent = "Uploading PDF...";
-
-        try {
-            const res = await fetch(API_BASE + "/generate/pdf", {
-                method: "POST",
-                body: form
-            });
-            const data = await res.json();
-            if (!data.questions || data.questions.length === 0) {
-                alert(data.error || "No questions generated from PDF.");
-            } else {
-                const quizId = "quiz_" + Date.now();
-                openQuizzes[quizId] = { title: data.title || file.name, data: data.questions };
-                addQuizToSidebar(quizId);
-                renderQuiz(quizId);
-            }
-        } catch (e) {
-            console.error(e);
-            alert("PDF upload failed. See console.");
-        } finally {
-            genBtn.disabled = false;
-            genBtn.textContent = "Generate Quiz";
-        }
-    }
-});
-
-// Helper to call JSON endpoints and process response
-async function callGenerateJSON(endpoint, payload) {
-    const genBtn = document.getElementById("generateBtn");
-    genBtn.disabled = true;
-    genBtn.textContent = "Generating...";
-
-    try {
-        const res = await fetch(API_BASE + endpoint, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-        const data = await res.json();
-        if (!data.questions || data.questions.length === 0) {
-            alert(data.error || "No questions generated.");
-            return;
-        }
-
-        const quizId = "quiz_" + Date.now();
-        openQuizzes[quizId] = { title: data.title || payload.topic || "Generated Quiz", data: data.questions };
-        addQuizToSidebar(quizId);
-        renderQuiz(quizId);
-    } catch (e) {
-        console.error(e);
-        alert("Generation failed. Check backend console.");
-    } finally {
-        genBtn.disabled = false;
-        genBtn.textContent = "Generate Quiz";
-    }
+function hideLoading() {
+    overlay.style.display = "none";
+    generateBtn.disabled = false;
 }
 
-// ---------- Sidebar: add quiz entry with rename & delete ----------
-function addQuizToSidebar(id) {
-    const q = openQuizzes[id];
-
-    // Container row
-    const row = el("div", "quiz-row flex items-center justify-between p-2 rounded hover:bg-gray-700");
-    row.dataset.quizId = id;
-
-    // Title area (click to open)
-    const left = el("div", "flex-1 cursor-pointer");
-    const titleSpan = el("span", "font-medium");
-    titleSpan.textContent = formatTitleForDisplay(q.title);
-    left.appendChild(titleSpan);
-    left.addEventListener("click", () => renderQuiz(id));
-
-    // Right controls
-    const right = el("div", "flex items-center space-x-2");
-
-    // Rename (pencil)
-    const renameBtn = el("button", "p-1");
-    renameBtn.title = "Rename";
-    renameBtn.innerHTML = "✏️";
-    renameBtn.addEventListener("click", () => {
-        const newName = prompt("Enter new quiz name:", q.title || "");
-        if (newName !== null) {
-            q.title = newName;
-            titleSpan.textContent = formatTitleForDisplay(newName);
-        }
-    });
-
-    // Download/save (floppy) — saves single quiz JSON
-    const saveBtn = el("button", "p-1");
-    saveBtn.title = "Download Quiz";
-    saveBtn.innerHTML = "💾";
-    saveBtn.addEventListener("click", () => {
-        const filename = (q.title || "quiz").replace(/\s+/g, "_") + ".json";
-        const blob = new Blob([JSON.stringify(q.data, null, 2)], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const a = el("a");
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        URL.revokeObjectURL(url);
-    });
-
-    // Delete (trash)
-    const delBtn = el("button", "p-1");
-    delBtn.title = "Delete";
-    delBtn.innerHTML = "🗑️";
-    delBtn.addEventListener("click", () => {
-        if (!confirm("Delete this saved quiz?")) return;
-        delete openQuizzes[id];
-        row.remove();
-        if (activeQuizId === id) {
-            document.getElementById("quizContainer").innerHTML = "";
-            document.getElementById("quizControls").classList.add("hidden");
-            activeQuizId = null;
-        }
-    });
-
-    right.appendChild(renameBtn);
-    right.appendChild(saveBtn);
-    right.appendChild(delBtn);
-
-    row.appendChild(left);
-    row.appendChild(right);
-    document.getElementById("quizList").appendChild(row);
-}
-
-// ---------- Render Quiz ----------
-function renderQuiz(id) {
-    activeQuizId = id;
+function showSkeletonLoader(count = 5) {
     const container = document.getElementById("quizContainer");
     container.innerHTML = "";
 
-    const quizObj = openQuizzes[id];
-    if (!quizObj) return;
-
-    const titleEl = el("h2", "text-2xl font-bold mb-4");
-    titleEl.textContent = quizObj.title || "Quiz";
-    container.appendChild(titleEl);
-
-    const questions = quizObj.data;
-    questions.forEach((q, index) => {
-        const block = el("div", "p-4 bg-gray-800 rounded border border-gray-700 mb-4");
-
-        const qTitle = el("p", "font-bold text-lg");
-        qTitle.textContent = `${index + 1}. ${q.question_text}`;
-        block.appendChild(qTitle);
-
-        const opts = el("div", "mt-2 space-y-2");
-        // ensure options order is fixed for rendering (not mutated original)
-        const localOpts = Array.isArray(q.options) ? [...q.options] : [];
-        localOpts.forEach(opt => {
-            const label = el("label", "flex items-center space-x-2");
-            const input = el("input");
-            input.type = "radio";
-            input.name = `q${index}`;
-            input.value = opt;
-            label.appendChild(input);
-            const span = el("span");
-            span.textContent = opt;
-            label.appendChild(span);
-            opts.appendChild(label);
-        });
-
-        // Explain button placeholder that will be added if wrong
-        block.appendChild(opts);
-        container.appendChild(block);
-    });
-
-    document.getElementById("quizControls").classList.remove("hidden");
-    document.getElementById("scoreLabel").textContent = "";
+    for (let i = 0; i < count; i++) {
+        const card = document.createElement("div");
+        card.className = "quiz-card";
+        card.innerHTML = `
+            <div class="skeleton skeleton-question"></div>
+            <div class="skeleton skeleton-option"></div>
+            <div class="skeleton skeleton-option"></div>
+            <div class="skeleton skeleton-option"></div>
+        `;
+        container.appendChild(card);
+    }
 }
 
-// ---------- Submit Answers ----------
-document.getElementById("submitBtn").addEventListener("click", async () => {
+function showToast(message, type = "info") {
+    const toast = document.getElementById("toast");
+    if (!toast) {
+        console.error("Toast element not found");
+        return;
+    }
+
+    toast.textContent = message;
+
+    toast.classList.remove("toast-success", "toast-error", "toast-info");
+    toast.classList.add(`toast-${type}`);
+
+    toast.style.display = "block";
+
+    setTimeout(() => {
+        toast.style.display = "none";
+    }, 3000);
+}
+
+
+const modalOverlay = document.getElementById("modalOverlay");
+const modalTitle = document.getElementById("modalTitle");
+const modalMessage = document.getElementById("modalMessage");
+const modalInput = document.getElementById("modalInput");
+const modalConfirm = document.getElementById("modalConfirm");
+const modalCancel = document.getElementById("modalCancel");
+
+function openModal({ title, message, showInput = false, inputValue = "", onConfirm }) {
+    modalTitle.textContent = title;
+    modalMessage.textContent = message;
+
+    if (showInput) {
+        modalInput.classList.remove("hidden");
+        modalInput.value = inputValue;
+        modalInput.focus();
+    } else {
+        modalInput.classList.add("hidden");
+    }
+
+    modalOverlay.classList.remove("hidden");
+
+    modalConfirm.onclick = () => {
+        modalOverlay.classList.add("hidden");
+        onConfirm(showInput ? modalInput.value : null);
+    };
+
+    modalCancel.onclick = () => {
+        modalOverlay.classList.add("hidden");
+    };
+}
+
+/* ================= Tabs ================= */
+function addQuizToSidebar(id) {
+    const quiz = openQuizzes[id];
+    const list = document.getElementById("quizList");
+
+    const row = document.createElement("div");
+    row.className =
+        "quiz-row flex items-center justify-between gap-2 p-2 rounded hover:bg-gray-700";
+
+    const title = document.createElement("span");
+    title.textContent = quiz.title || "Untitled Quiz";
+    title.className = "cursor-pointer flex-1 truncate";
+    title.onclick = () => {
+        activeQuizId = id;
+        renderQuiz(id);
+    };
+
+    const actions = document.createElement("div");
+    actions.className = "flex gap-1";
+
+    /* ✏️ Rename */
+    const renameBtn = document.createElement("button");
+    renameBtn.innerHTML = "✏️";
+    renameBtn.title = "Rename quiz";
+    renameBtn.onclick = () => {
+        openModal({
+            title: "Rename Quiz",
+            message: "Enter a new name for this quiz.",
+            showInput: true,
+            inputValue: quiz.title || "",
+            onConfirm: (newName) => {
+                if (!newName.trim()) return;
+                quiz.title = newName;
+                title.textContent = newName;
+                showToast("Quiz renamed.", "info");
+            }
+        });
+    };
+
+    /* 🗑️ Delete */
+    const deleteBtn = document.createElement("button");
+    deleteBtn.innerHTML = "🗑️";
+    deleteBtn.title = "Delete quiz";
+    deleteBtn.onclick = () => {
+        openModal({
+            title: "Delete Quiz",
+            message: "Are you sure you want to delete this quiz from the session?",
+            onConfirm: () => {
+                delete openQuizzes[id];
+                row.remove();
+
+                if (activeQuizId === id) {
+                    quizContainer.innerHTML = "";
+                    quizControls.classList.add("hidden");
+                    activeQuizId = null;
+                }
+
+                showToast("Quiz deleted from session.", "info");
+            }
+        });
+    };
+
+    actions.appendChild(renameBtn);
+    actions.appendChild(deleteBtn);
+
+    row.appendChild(title);
+    row.appendChild(actions);
+    list.appendChild(row);
+}
+
+
+document.querySelectorAll(".tab-btn").forEach(btn => {
+    btn.onclick = () => {
+        document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active-tab"));
+        document.querySelectorAll(".tab-panel").forEach(p => p.classList.add("hidden"));
+        btn.classList.add("active-tab");
+        document.getElementById(btn.dataset.tab).classList.remove("hidden");
+    };
+});
+
+/* ================= API Helper ================= */
+async function postJSON(endpoint, payload) {
+    const res = await fetch(API_BASE + endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    return res.json();
+}
+
+/* ================= Generate ================= */
+generateBtn.onclick = async () => {
+    const mode = modeSelect.value;
+    const cognitive = cognitiveSelect.value;
+    const num = Number(numSelect.value);
+
+    /* ✅ STEP 1: VALIDATE FIRST */
+    if (!topicTab.classList.contains("hidden")) {
+        if (!topicInput.value.trim()) {
+            showToast("Please enter a topic.", "error");
+            return;
+        }
+    }
+
+    if (!passageTab.classList.contains("hidden")) {
+        if (!passageInput.value.trim()) {
+            showToast("Please paste a passage.", "error");
+            return;
+        }
+    }
+
+    if (!webTab.classList.contains("hidden")) {
+        if (!webInput.value.trim()) {
+            showToast("Please paste a valid URL.", "error");
+            return;
+        }
+    }
+
+    /* ✅ STEP 2: SHOW LOADING ONLY AFTER VALID INPUT */
+    showLoading();
+
+    try {
+        let data;
+
+        if (!topicTab.classList.contains("hidden")) {
+            data = await postJSON("/generate/topic", {
+                topic: topicInput.value,
+                mode,
+                cognitive_level: cognitive,
+                num_questions: num
+            });
+        } 
+        else if (!passageTab.classList.contains("hidden")) {
+            data = await postJSON("/generate/passage", {
+                passage: passageInput.value,
+                mode,
+                cognitive_level: cognitive,
+                num_questions: num
+            });
+        } 
+        else {
+            data = await postJSON("/generate/webpage", {
+                url: webInput.value,
+                mode,
+                cognitive_level: cognitive,
+                num_questions: num
+            });
+        }
+
+        if (!data.questions?.length) {
+            hideLoading();
+            showToast(data.error || "No questions could be generated.", "error");
+            return;
+        }
+
+        const id = "quiz_" + Date.now();
+        openQuizzes[id] = {
+            title: data.title || "Generated Quiz",
+            data: data.questions
+        };
+
+        activeQuizId = id;
+        addQuizToSidebar(id);
+        renderQuiz(id);
+
+        showToast("Quiz added to current session.", "success");
+
+    } catch (err) {
+        console.error(err);
+        showToast("Generation failed. Please try again.", "error");
+    } finally {
+        hideLoading();
+    }
+};
+
+
+/* ================= Render Quiz ================= */
+function renderQuiz(id) {
+    const quiz = openQuizzes[id];
+    quizContainer.innerHTML = "";
+
+    quiz.data.forEach((q, i) => {
+        const card = document.createElement("div");
+        card.className = "quiz-card";
+        card.innerHTML = `
+            <p class="font-bold mb-2">${i + 1}. ${q.question_text}</p>
+            ${q.options.map(o => `
+                <label class="flex gap-2 mb-1">
+                    <input type="radio" name="q${i}" value="${o}">
+                    <span>${o}</span>
+                </label>
+            `).join("")}
+        `;
+        quizContainer.appendChild(card);
+    });
+
+    quizControls.classList.remove("hidden");
+    scoreLabel.textContent = "";
+}
+
+/* ================= Submit Answers ================= */
+submitBtn.onclick = () => {
     if (!activeQuizId) return;
+
     const questions = openQuizzes[activeQuizId].data;
     let score = 0;
-    const container = document.getElementById("quizContainer");
-    weakSpots = weakSpots || [];
+    const container = quizContainer;
 
     questions.forEach((q, i) => {
         const selected = container.querySelector(`input[name='q${i}']:checked`);
-        const qBlock = container.children[i + 1]; // because first child is title element
-        // reset any previous explain button
-        const prevExplain = qBlock.querySelector(".explain-btn");
-        if (prevExplain) prevExplain.remove();
+        const qBlock = container.children[i];
 
-        if (!selected) {
-            // not answered
-            qBlock.querySelector("p").style.color = "";
-        } else if (selected.value === q.correct_answer) {
+        if (!selected) return;
+
+        if (selected.value === q.correct_answer) {
             score++;
-            qBlock.querySelector("p").style.color = "#2ECC71"; // green
+            qBlock.querySelector("p").style.color = "#22c55e";
         } else {
-            qBlock.querySelector("p").style.color = "#E74C3C"; // red
-            // add to weak spots
+            qBlock.querySelector("p").style.color = "#ef4444";
             if (q.topic_tag && !weakSpots.includes(q.topic_tag)) {
                 weakSpots.push(q.topic_tag);
             }
-            // add Explain button
-            const explainBtn = el("button", "explain-btn mt-2 py-1 px-2 rounded");
-            explainBtn.textContent = "🧑‍🏫 Explain Why";
-            explainBtn.addEventListener("click", () => getExplanationAndShow(q.question_text, selected.value, q.correct_answer));
-            qBlock.appendChild(explainBtn);
         }
     });
 
-    document.getElementById("weakSpotBtn").disabled = weakSpots.length === 0;
-    document.getElementById("scoreLabel").textContent = `Score: ${score}/${questions.length}`;
-    document.getElementById("submitBtn").disabled = true;
-});
+    weakSpotBtn.disabled = weakSpots.length === 0;
+    scoreLabel.textContent = `Score: ${score}/${questions.length}`;
+};
 
-// ---------- Show Answers ----------
-document.getElementById("showAnsBtn").addEventListener("click", () => {
+/* ================= Show Answers ================= */
+showAnsBtn.onclick = () => {
     if (!activeQuizId) return;
-    const questions = openQuizzes[activeQuizId].data;
-    const container = document.getElementById("quizContainer");
 
-    questions.forEach((q, i) => {
-        const radios = container.querySelectorAll(`input[name='q${i}']`);
-        radios.forEach(r => {
-            if (r.value === q.correct_answer) {
-                r.checked = true;
-                r.parentElement.style.color = "#2ECC71";
-            } else {
-                r.parentElement.style.color = "";
-            }
-        });
+    openQuizzes[activeQuizId].data.forEach((q, i) => {
+        quizContainer
+            .querySelectorAll(`input[name='q${i}']`)
+            .forEach(r => {
+                if (r.value === q.correct_answer) {
+                    r.checked = true;
+                    r.parentElement.style.color = "#22c55e";
+                }
+            });
     });
+};
 
-    document.getElementById("showAnsBtn").disabled = true;
-});
-
-// ---------- Copy Quiz ----------
-document.getElementById("copyBtn").addEventListener("click", () => {
+/* ================= Copy Quiz ================= */
+copyBtn.onclick = () => {
     if (!activeQuizId) return;
-    const quiz = openQuizzes[activeQuizId].data;
+
     let text = "";
-    quiz.forEach((q, i) => {
+    openQuizzes[activeQuizId].data.forEach((q, i) => {
         text += `Q${i + 1}: ${q.question_text}\n`;
         q.options.forEach((o, j) => {
             text += `  ${String.fromCharCode(65 + j)}. ${o}\n`;
         });
         text += `Correct: ${q.correct_answer}\n\n`;
     });
-    navigator.clipboard.writeText(text).then(() => alert("Copied quiz to clipboard"));
-});
 
-// ---------- Explanation (calls backend) ----------
-async function getExplanationAndShow(question, userAnswer, correctAnswer) {
-    try {
-        const res = await fetch(API_BASE + "/explain", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ question, user_answer: userAnswer, correct_answer: correctAnswer })
-        });
-        const data = await res.json();
-        alert(data.explanation || "No explanation returned.");
-    } catch (e) {
-        console.error(e);
-        alert("Failed to fetch explanation.");
+    navigator.clipboard.writeText(text);
+    showToast("Quiz copied to clipboard!", "success");
+};
+
+/* ================= Weak Spot Practice ================= */
+weakSpotBtn.onclick = async () => {
+    if (!weakSpots.length) {
+        showToast("No weak spots yet. Answer some questions first.", "info");
+        return;
     }
-}
 
-// ---------- Weak Spot Practice ----------
-document.getElementById("weakSpotBtn").addEventListener("click", async () => {
-    if (weakSpots.length === 0) { alert("No weak spots yet!"); return; }
     const topics = [...new Set(weakSpots)].join(", ");
-    const res = await fetch(API_BASE + "/generate/topic", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ topic: topics, mode: "Hard", cognitive_level: "Application", num_questions: 5 })
+    const data = await postJSON("/generate/topic", {
+        topic: topics,
+        mode: "Hard",
+        cognitive_level: "Application",
+        num_questions: 5
     });
-    const data = await res.json();
-    if (!data.questions || data.questions.length === 0) { alert("No questions generated for weak spots."); return; }
-    const quizId = "quiz_" + Date.now();
-    openQuizzes[quizId] = { title: "Weak Spot Review", data: data.questions };
-    addQuizToSidebar(quizId);
-    renderQuiz(quizId);
-});
 
-// ---------- Save / Load Session (client side) ----------
-document.getElementById("saveSessionBtn").addEventListener("click", () => {
-    // Save all quizzes into single JSON file
-    const filename = "quiz_session_" + Date.now() + ".json";
-    const payload = [];
-    for (const [qid, info] of Object.entries(openQuizzes)) {
-        payload.push({ id: qid, title: info.title, data: info.data });
+    if (!data.questions?.length) {
+        showToast("Could not generate weak-spot questions.", "error");
+        return;
     }
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = el("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-});
 
-// Load session: create a hidden file input and click it
-document.getElementById("loadSessionBtn").addEventListener("click", () => {
-    const fi = el("input");
+    const id = "quiz_" + Date.now();
+    openQuizzes[id] = { title: "Weak Spot Review", data: data.questions };
+    renderQuiz(id);
+    showToast("Weak spot quiz generated!", "success");
+};
+
+/* ================= Save / Load Session ================= */
+saveSessionBtn.onclick = () => {
+    const payload = Object.values(openQuizzes);
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `quiz_session_${Date.now()}.json`;
+    a.click();
+    showToast("Session saved successfully!", "success");
+};
+
+loadSessionBtn.onclick = () => {
+    const fi = document.createElement("input");
     fi.type = "file";
-    fi.accept = ".json,application/json";
-    fi.onchange = (e) => {
+    fi.accept = ".json";
+
+    fi.onchange = e => {
         const file = e.target.files[0];
         if (!file) return;
+
         const reader = new FileReader();
-        reader.onload = (ev) => {
+        reader.onload = ev => {
             try {
                 const parsed = JSON.parse(ev.target.result);
-                // parsed expected: array of {id?, title, data}
-                // Clear current list UI
+
+                // clear UI
                 document.getElementById("quizList").innerHTML = "";
                 openQuizzes = {};
+                activeQuizId = null;
+
                 parsed.forEach(item => {
-                    const qid = item.id || ("quiz_" + Date.now() + Math.floor(Math.random() * 1000));
-                    openQuizzes[qid] = { title: item.title || "Loaded Quiz", data: item.data || [] };
-                    addQuizToSidebar(qid);
+                    const id = "quiz_" + Date.now() + Math.random();
+                    openQuizzes[id] = {
+                        title: item.title || "Loaded Quiz",
+                        data: item.data || []
+                    };
+                    addQuizToSidebar(id);
                 });
-                // show first quiz if any
-                const keys = Object.keys(openQuizzes);
-                if (keys.length) renderQuiz(keys[0]);
-                alert("Session loaded.");
+
+                const firstId = Object.keys(openQuizzes)[0];
+                if (firstId) {
+                    activeQuizId = firstId;
+                    renderQuiz(firstId);
+                }
+
+                showToast("Session loaded successfully!", "success");
             } catch (err) {
                 console.error(err);
-                alert("Failed to parse session file.");
+                showToast("Invalid session file.", "error");
             }
         };
         reader.readAsText(file);
     };
-    document.body.appendChild(fi);
+
     fi.click();
-    fi.remove();
+};
+
+
+/* ================= Enter Key Handling ================= */
+["topicInput", "webInput"].forEach(id => {
+    document.getElementById(id)?.addEventListener("keydown", e => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            generateBtn.click();
+        }
+    });
 });
+
+passageInput?.addEventListener("keydown", e => {
+    if (e.key === "Enter" && e.ctrlKey) {
+        e.preventDefault();
+        generateBtn.click();
+    }
+});
+document.getElementById("pdfBtn").addEventListener("click", () => {
+    if (!activeQuizId) {
+        showToast("No quiz to export.", "error");
+        return;
+    }
+
+    const quiz = openQuizzes[activeQuizId];
+
+    /* ===== Create clean PDF container ===== */
+    const pdfRoot = document.createElement("div");
+    pdfRoot.style.fontFamily = "Times New Roman, serif";
+    pdfRoot.style.color = "#000";
+    pdfRoot.style.padding = "24px";
+    pdfRoot.style.background = "#fff";
+
+    /* Title */
+    const title = document.createElement("h1");
+    title.textContent = quiz.title || "Quiz";
+    title.style.textAlign = "center";
+    title.style.marginBottom = "24px";
+    pdfRoot.appendChild(title);
+
+    /* Questions */
+    quiz.data.forEach((q, index) => {
+        const block = document.createElement("div");
+        block.style.marginBottom = "20px";
+        block.style.pageBreakInside = "avoid";
+
+        /* Question text */
+        const qText = document.createElement("p");
+        qText.innerHTML = `<strong>${index + 1}.</strong> ${q.question_text}`;
+        qText.style.marginBottom = "8px";
+        block.appendChild(qText);
+
+        /* Options */
+        const opts = document.createElement("ol");
+        opts.type = "A";
+        opts.style.marginLeft = "20px";
+
+        q.options.forEach(opt => {
+            const li = document.createElement("li");
+            li.textContent = opt;
+            li.style.marginBottom = "4px";
+            opts.appendChild(li);
+        });
+
+        block.appendChild(opts);
+        pdfRoot.appendChild(block);
+    });
+
+    /* ===== Generate PDF ===== */
+    html2pdf()
+        .set({
+            margin: 0.75,
+            filename: (quiz.title || "quiz").replace(/\s+/g, "_") + ".pdf",
+            image: { type: "jpeg", quality: 0.98 },
+            html2canvas: { scale: 2 },
+            jsPDF: { unit: "in", format: "a4", orientation: "portrait" }
+        })
+        .from(pdfRoot)
+        .save();
+
+    showToast("PDF downloaded successfully.", "success");
+});
+const answerTitle = document.createElement("h2");
+answerTitle.textContent = "Answer Key";
+pdfRoot.appendChild(answerTitle);
+
+quiz.data.forEach((q, i) => {
+    const ans = document.createElement("p");
+    ans.textContent = `${i + 1}. ${q.correct_answer}`;
+    pdfRoot.appendChild(ans);
+});
+

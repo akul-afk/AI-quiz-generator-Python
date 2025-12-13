@@ -1,134 +1,136 @@
 <!DOCTYPE html>
-<html lang="en" class="bg-gray-900 text-gray-100">
+<html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
     <title>AI MCQ Quiz Generator</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- TailwindCSS CDN -->
+    <!-- Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
 
-    <!-- Custom JS -->
+    <!-- Custom styles -->
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+    <!-- App logic -->
+
     <script defer src="app.js"></script>
 </head>
 
-<body class="h-screen flex">
+<body class="bg-gray-900 text-gray-100 h-screen flex">
 
-    <!-- Sidebar -->
-    <aside class="w-72 bg-gray-800 border-r border-gray-700 p-5 flex flex-col">
-        <h1 class="text-3xl font-bold mb-6">AI Quiz</h1>
+<!-- ================= Loading Overlay ================= -->
+<div id="loadingOverlay">
+    <div class="spinner"></div>
+    <p class="loading-text">Generating questions…</p>
+</div>
 
-        <h2 class="text-lg font-semibold text-gray-300 mb-2">Saved Quizzes</h2>
-        <div id="quizList" class="flex-1 overflow-y-auto space-y-2"></div>
+<!-- ================= Sidebar ================= -->
+<aside class="w-72 bg-gray-800 border-r border-gray-700 p-4 flex flex-col">
+    <h1 class="text-2xl font-bold mb-4">AI Quiz</h1>
 
-        <button id="weakSpotBtn"
-            class="mt-4 py-2 px-4 bg-teal-600 hover:bg-teal-700 rounded disabled:opacity-40"
-            disabled>
-            🎯 Practice Weak Spots
+    <h2 class="text-sm uppercase text-gray-400 mb-2">Saved Quizzes</h2>
+    <div id="quizList" class="flex-1 space-y-2 overflow-y-auto"></div>
+
+    <button id="weakSpotBtn" class="btn btn-primary mt-4" disabled>
+        🎯 Practice Weak Spots
+    </button>
+
+    <button id="saveSessionBtn" class="btn btn-secondary mt-2">
+        💾 Save Session
+    </button>
+
+    <button id="loadSessionBtn" class="btn btn-secondary mt-2">
+        📂 Load Session
+    </button>
+</aside>
+
+<!-- ================= Main ================= -->
+<main class="flex-1 p-6 overflow-y-auto">
+
+    <!-- Tabs -->
+    <div class="flex gap-3 mb-6">
+        <button class="tab-btn active-tab" data-tab="topicTab">📝 Topic</button>
+        <button class="tab-btn" data-tab="passageTab">📄 Passage</button>
+        <button class="tab-btn" data-tab="webTab">🌐 Webpage</button>
+    </div>
+
+    <!-- Tab Panels -->
+    <section id="topicTab" class="tab-panel">
+        <input id="topicInput" class="input" placeholder="Enter a topic">
+    </section>
+
+    <section id="passageTab" class="tab-panel hidden">
+        <textarea id="passageInput" class="input h-40" placeholder="Paste passage here"></textarea>
+    </section>
+
+    <section id="webTab" class="tab-panel hidden">
+        <input id="webInput" class="input" placeholder="Paste URL">
+    </section>
+
+    <!-- Controls -->
+    <div class="grid grid-cols-4 gap-4 mt-6">
+        <select id="modeSelect" class="input">
+            <option selected>Easy</option>
+            <option>Medium</option>
+            <option>Hard</option>
+        </select>
+
+
+        <select id="cognitiveSelect" class="input">
+            <option>Knowledge</option>
+            <option>Comprehension</option>
+            <option>Application</option>
+        </select>
+
+        <select id="numSelect" class="input">
+            <option>5</option>
+            <option selected>10</option>
+            <option>15</option>
+            <option>20</option>
+        </select>
+
+        <button id="generateBtn" class="btn btn-primary">
+            Generate Quiz
         </button>
+    </div>
 
-        <button id="saveSessionBtn"
-            class="mt-2 py-2 px-4 bg-blue-600 hover:bg-blue-700 rounded">
-            💾 Save Session
-        </button>
+    <!-- Quiz -->
+    <div id="quizContainer" class="mt-8 space-y-4"></div>
 
-        <button id="loadSessionBtn"
-            class="mt-2 py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded">
-            📂 Load Session
-        </button>
-    </aside>
+    <!-- Quiz Controls -->
+    <div id="quizControls" class="mt-6 flex gap-4 hidden">
+        <button id="submitBtn" class="btn btn-success">Submit</button>
+        <button id="showAnsBtn" class="btn btn-secondary">Show Answers</button>
+        <button id="copyBtn" class="btn btn-secondary">Copy</button>
+        <button id="pdfBtn" class="btn btn-secondary">📄 Download PDF</button>
 
-    <!-- Main Area -->
-    <main class="flex-1 p-8 overflow-y-auto">
+        <span id="scoreLabel" class="text-xl font-bold"></span>
+    </div>
+    <div id="toast"></div>
+    <!-- ================= Modal ================= -->
+<div id="modalOverlay" class="modal-overlay hidden">
+    <div class="modal">
+        <h3 id="modalTitle" class="modal-title"></h3>
+        <p id="modalMessage" class="modal-message"></p>
 
-        <!-- Tabs -->
-        <div class="flex space-x-4 border-b border-gray-700 pb-3 mb-6">
-            <button class="tab-btn active-tab" data-tab="topicTab">📝 Topic</button>
-            <button class="tab-btn" data-tab="passageTab">📄 Passage</button>
-            <button class="tab-btn" data-tab="webTab">🌐 Webpage</button>
-            <button class="tab-btn" data-tab="pdfTab">📚 PDF</button>
+        <input
+            id="modalInput"
+            class="input hidden"
+            placeholder="Enter name"
+        />
+
+        <div class="modal-actions">
+            <button id="modalCancel" class="btn btn-secondary">Cancel</button>
+            <button id="modalConfirm" class="btn btn-primary">Confirm</button>
         </div>
+    </div>
+</div>
 
-        <!-- Tab Content Panels -->
-        <section id="topicTab" class="tab-panel">
-            <input id="topicInput"
-                class="w-full p-3 rounded bg-gray-800 border border-gray-700"
-                placeholder="Enter a topic (e.g., The Roman Empire)">
-        </section>
 
-        <section id="passageTab" class="tab-panel hidden">
-            <textarea id="passageInput"
-                class="w-full p-3 h-48 rounded bg-gray-800 border border-gray-700"
-                placeholder="Paste your passage here..."></textarea>
-        </section>
+</main>
 
-        <section id="webTab" class="tab-panel hidden">
-            <input id="webInput"
-                class="w-full p-3 rounded bg-gray-800 border border-gray-700"
-                placeholder="Paste URL (https://...)">
-        </section>
 
-        <section id="pdfTab" class="tab-panel hidden">
-            <input id="pdfInput" type="file" accept="application/pdf"
-                   class="block p-2 bg-gray-800 border border-gray-700 rounded">
-        </section>
-
-        <!-- Controls -->
-        <div class="mt-6 grid grid-cols-4 gap-4">
-            <select id="modeSelect" class="p-2 rounded bg-gray-800 border border-gray-700">
-                <option>Medium</option>
-                <option>Easy</option>
-                <option>Hard</option>
-            </select>
-
-            <select id="cognitiveSelect" class="p-2 rounded bg-gray-800 border border-gray-700">
-                <option>Knowledge</option>
-                <option>Comprehension</option>
-                <option>Application</option>
-            </select>
-
-            <select id="numSelect" class="p-2 rounded bg-gray-800 border border-gray-700">
-                <option>5</option>
-                <option>10</option>
-                <option selected>15</option>
-                <option>20</option>
-            </select>
-
-            <button id="generateBtn"
-                class="py-2 bg-blue-600 hover:bg-blue-700 rounded">
-                Generate Quiz
-            </button>
-        </div>
-
-        <!-- Quiz Display -->
-        <div id="quizContainer" class="mt-10 space-y-6"></div>
-
-        <!-- Submit and Control Buttons -->
-        <div id="quizControls" class="mt-8 hidden space-x-4">
-            <button id="submitBtn"
-                class="py-2 px-4 bg-green-600 hover:bg-green-700 rounded">
-                ✅ Submit Answers
-            </button>
-
-            <button id="showAnsBtn"
-                class="py-2 px-4 bg-yellow-600 hover:bg-yellow-700 rounded">
-                💡 Show Answers
-            </button>
-
-            <button id="copyBtn"
-                class="py-2 px-4 bg-purple-600 hover:bg-purple-700 rounded">
-                📋 Copy Quiz
-            </button>
-
-            <span id="scoreLabel" class="font-bold text-xl ml-4"></span>
-        </div>
-
-    </main>
-
-    <!-- Tab Button Styling -->
-    <style>
-        .tab-btn { padding: 6px 12px; border-radius: 4px; }
-        .active-tab { background: #2563eb; }
-    </style>
 </body>
 </html>
