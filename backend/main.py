@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import os
 
-from quiz_engine import (
+from backend.quiz_engine import (
     generate_mcqs,
     generate_medium_mcqs,
     generate_hard_mcqs_from_topic,
