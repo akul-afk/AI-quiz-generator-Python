@@ -16,6 +16,9 @@ function el(tag, className = "") {
 /* ================= UI Helpers ================= */
 const overlay = document.getElementById("loadingOverlay");
 const generateBtn = document.getElementById("generateBtn");
+// ================= PDF =================
+const pdfRoot = document.getElementById("quizContainer");
+
 
 function showLoading(text = "Generating questions…") {
     document.getElementById("quizControls").classList.add("hidden");
