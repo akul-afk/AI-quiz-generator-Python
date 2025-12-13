@@ -166,7 +166,14 @@ def generate_medium_mcqs(text, num_questions, level, is_from_topic=False):
     "- question_text\n"
     "- options (exactly 4)\n"
     "- correct_answer\n"
-    "- topic_tag"
+    "- topic_tag\n"
+    "OPTION QUALITY RULES:\n"
+    "- All options must be similar in length (±15%).\n"
+    "- All options must have the same grammatical structure.\n"
+    "- The correct answer must NOT be longer or more detailed than distractors.\n"
+    "- Avoid explanations, examples, or qualifiers inside any option.\n"
+    "- Distractors must be equally plausible."
+
 )
 
     user_prompt = (
@@ -178,6 +185,9 @@ def generate_medium_mcqs(text, num_questions, level, is_from_topic=False):
 
     raw = call_gemini(sys_prompt, user_prompt)
     parsed = parse_ai_json(raw)
+
+    
+
 
     if not parsed:
         return []
