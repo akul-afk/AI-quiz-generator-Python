@@ -20,6 +20,13 @@ FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
 
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
+@app.get("/healthz")
+async def healthz():
+    return {
+        "status": "ok",
+        "service": "ai-quiz-generator"
+    }
+
 @app.get("/")
 async def serve_frontend():
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
