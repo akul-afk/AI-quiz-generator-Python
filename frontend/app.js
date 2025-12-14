@@ -1,5 +1,5 @@
 //const API_BASE = "http://127.0.0.1:8000";
-const API_BASE = "https://your-render-backend.onrender.com";
+const API_BASE = "";
 
 
 
@@ -296,6 +296,23 @@ function renderQuiz(id) {
         `;
         quizContainer.appendChild(card);
     });
+    /* ===== Answer Key ===== */
+        const answerTitle = document.createElement("h2");
+        answerTitle.textContent = "Answer Key";
+        answerTitle.style.marginTop = "32px";
+        answerTitle.style.borderTop = "2px solid #000";
+        answerTitle.style.paddingTop = "12px";
+        answerTitle.style.pageBreakBefore = "always"; // start on new page
+
+        pdfRoot.appendChild(answerTitle);
+
+        quiz.data.forEach((q, i) => {
+            const ans = document.createElement("p");
+            ans.textContent = `${i + 1}. ${q.correct_answer}`;
+            ans.style.marginBottom = "6px";
+            pdfRoot.appendChild(ans);
+        });
+
 
     quizControls.classList.remove("hidden");
     scoreLabel.textContent = "";
@@ -511,11 +528,7 @@ document.getElementById("pdfBtn").addEventListener("click", () => {
 
         block.appendChild(opts);
         pdfRoot.appendChild(block);
-        const quiz = openQuizzes[activeQuizId];
-        if (!quiz) {
-            showToast("No active quiz found", "error");
-            return;
-        }
+        
     });
 
     /* ===== Generate PDF ===== */
@@ -531,15 +544,5 @@ document.getElementById("pdfBtn").addEventListener("click", () => {
         .save();
 
     showToast("PDF downloaded successfully.", "success");
-});
-const answerTitle = document.createElement("h2");
-answerTitle.textContent = "Answer Key";
-pdfRoot.appendChild(answerTitle);
-
-
-quiz.data.forEach((q, i) => {
-    const ans = document.createElement("p");
-    ans.textContent = `${i + 1}. ${q.correct_answer}`;
-    pdfRoot.appendChild(ans);
 });
 

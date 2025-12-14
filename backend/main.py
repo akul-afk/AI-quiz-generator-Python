@@ -14,6 +14,13 @@ from backend.quiz_engine import (
 )
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],   
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
@@ -33,13 +40,7 @@ async def healthz():
 
 
 # ================= CORS =================
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],   
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+
 
 
 # ================= Helpers =================
