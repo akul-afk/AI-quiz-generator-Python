@@ -511,6 +511,11 @@ document.getElementById("pdfBtn").addEventListener("click", () => {
 
         block.appendChild(opts);
         pdfRoot.appendChild(block);
+        const quiz = openQuizzes[activeQuizId];
+        if (!quiz) {
+            showToast("No active quiz found", "error");
+            return;
+        }
     });
 
     /* ===== Generate PDF ===== */
@@ -530,11 +535,7 @@ document.getElementById("pdfBtn").addEventListener("click", () => {
 const answerTitle = document.createElement("h2");
 answerTitle.textContent = "Answer Key";
 pdfRoot.appendChild(answerTitle);
-const quiz = openQuizzes[activeQuizId];
-if (!quiz) {
-    showToast("No active quiz found", "error");
-    return;
-}
+
 
 quiz.data.forEach((q, i) => {
     const ans = document.createElement("p");
